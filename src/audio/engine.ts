@@ -254,9 +254,30 @@ export class AudioEngine {
   }
 
   // Capture audio from the post-filter, pre-delay path for offline analysis.
-  // Returns a function that yields the captured Float32Array (mono).
+  // The raw-input tap is what the analysis worker wants: clean mic audio
+  // *after* the high/low-pass safety filters but *before* the delay/pitch/
+  // spectral stages.
   captureRawInput(durationSec: number): Promise<Float32Array> {
     if (!this.ctx || !this.lowpass) {
+      return Promise.reject(new Error('engine not running'));
+    }
+    return this.tapAudio(this.lowpass, durationSec);
+  }
+
+  // Capture audio from the post-effects output bus — what the listener is
+  // actually hearing. The raw-input tap above is only useful for offline-
+  // analysis pipelines that need clean pre-effect audio; for "record what I
+  // just heard" the user needs this one. The output bus already mixes the
+  // dry + wet branches and applies the output-gain trim.
+  captureOutput(durationSec: number): Promise<Float32Array> {
+    if (!this.ctx || !this.outGain) {
+      return Promise.reject(new Error('engine not running'));
+    }
+    return this.tapAudio(this.outGain, durationSec);
+  }
+
+  private tapAudio(source: AudioNode, durationSec: number): Promise<Float32Array> {
+    if (!this.ctx) {
       return Promise.reject(new Error('engine not running'));
     }
     const ctx = this.ctx;
@@ -267,7 +288,7 @@ export class AudioEngine {
     });
     const sink = ctx.createGain();
     sink.gain.value = 0;
-    this.lowpass.connect(tap);
+    source.connect(tap);
     tap.connect(sink);
     sink.connect(ctx.destination);
 

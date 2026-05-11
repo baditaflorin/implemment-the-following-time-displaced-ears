@@ -1,6 +1,7 @@
 import { AudioEngine, DEFAULT_PARAMS, type EngineParams, type SpectralMode } from '../audio/engine';
 import { Spectrogram } from '../audio/spectrogram';
 import { loadPrefs, savePrefs } from '../lib/prefs';
+import { encodeWavMono16, triggerDownload } from '../lib/wav';
 import { mountAnalysisPanel } from './analysis-panel';
 
 interface Preset {
@@ -80,6 +81,10 @@ export function mountApp(root: HTMLElement): void {
             <button id="start" class="primary">Start listening</button>
             <button id="stop" class="danger hidden">Stop</button>
             <span id="status" class="status">click start &amp; grant mic access</span>
+          </div>
+          <div class="row">
+            <button id="record-output" disabled>Record output 5s</button>
+            <span id="record-status" class="status">capture what you're hearing</span>
           </div>
         </section>
 
@@ -315,6 +320,7 @@ export function mountApp(root: HTMLElement): void {
     startBtn.classList.toggle('hidden', state === 'running' || state === 'starting');
     stopBtn.classList.toggle('hidden', state !== 'running' && state !== 'starting');
     startBtn.disabled = state === 'starting';
+    syncRecordButton(state as ReturnType<AudioEngine['getState']>);
   }
 
   function updateMeter(rms: number): void {
@@ -344,7 +350,48 @@ export function mountApp(root: HTMLElement): void {
     spectro = null;
     void engine.stop();
     meterFill.style.width = '0%';
+    syncRecordButton('idle');
   });
+
+  const recordBtn = $<HTMLButtonElement>('#record-output');
+  const recordStatus = $<HTMLSpanElement>('#record-status');
+  const RECORD_SECONDS = 5;
+  let recording = false;
+  recordBtn.addEventListener('click', () => {
+    void runRecord();
+  });
+
+  async function runRecord(): Promise<void> {
+    if (recording) return;
+    if (engine.getState() !== 'running') {
+      recordStatus.textContent = 'start listening first';
+      return;
+    }
+    recording = true;
+    recordBtn.disabled = true;
+    try {
+      recordStatus.textContent = `recording ${RECORD_SECONDS}s of output…`;
+      const audio = await engine.captureOutput(RECORD_SECONDS);
+      const sampleRate = engine.getSampleRate();
+      const blob = encodeWavMono16(audio, sampleRate);
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      triggerDownload(blob, `time-displaced-ears-output-${stamp}.wav`);
+      recordStatus.textContent = `saved ${audio.length} samples at ${sampleRate} Hz`;
+    } catch (err) {
+      recordStatus.textContent = `error: ${err instanceof Error ? err.message : err}`;
+    } finally {
+      recording = false;
+      syncRecordButton(engine.getState());
+    }
+  }
+
+  function syncRecordButton(state: ReturnType<AudioEngine['getState']>): void {
+    if (recording) return;
+    recordBtn.disabled = state !== 'running';
+    if (state !== 'running') {
+      recordStatus.textContent = "capture what you're hearing";
+    }
+  }
 
   mountAnalysisPanel($<HTMLElement>('#analysis-card'), engine);
 
