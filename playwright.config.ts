@@ -4,7 +4,8 @@ const PORT = Number(process.env['SMOKE_PORT'] ?? 4173);
 const BASE_PATH = '/implemment-the-following-time-displaced-ears';
 
 export default defineConfig({
-  testDir: './tests/smoke',
+  testDir: './tests',
+  testIgnore: ['unit/**'],
   timeout: 60_000,
   expect: { timeout: 8_000 },
   fullyParallel: false,
