@@ -1,6 +1,25 @@
-# Postmortem — v0.2.0
+# Postmortem — v0.3.0
 
 Date: 2026-05-11
+
+## v0.3.0 update
+
+Third pass in the same session. Adds STFT-based spectral effects (the brief's "WebGPU FFT" item — see ADR 0019 for why we used an AudioWorklet + hand-rolled radix-2 FFT instead of WebGPU compute), WAV export of captured clips, and mobile polish.
+
+What shipped:
+
+1. **`spectral.worklet.ts` — STFT processor with 3 modes** (`bypass`, `freeze`, `smear`). 1024-point radix-2 FFT, 50% overlap, sqrt-periodic-Hann analysis+synthesis window for exact COLA. Freeze captures the magnitude spectrum on demand and emits it indefinitely with per-bin natural-frequency phase advance. Smear is exponential magnitude smoothing across frames.
+2. **`src/audio/lib/fft.ts`** — shared FFT module, imported by the worklet AND the unit tests. Unit tests verify forward DFT of a known cosine, fft↔ifft round-trip below 1e-4 max error, and Hann² COLA at 50% overlap.
+3. **DSP regression test for spectral freeze** — feeds 1000 Hz for the first second and 200 Hz for the second, freezes on the first complete FFT frame, asserts the post-transition output is still dominated by 1000 Hz. Passed first try.
+4. **WAV export** — captured 5-second clips are now downloadable as 16-bit mono WAV via a new button next to "Capture & analyze". Tiny encoder in `src/lib/wav.ts`.
+5. **Mobile polish** — taller spectrogram at <600 px, 44 px minimum touch targets, larger range-slider thumbs.
+
+Two surprises along the way:
+
+- **Port messages don't flush reliably in `OfflineAudioContext`.** The first version of the freeze test sent `{type: 'freeze'}` via `port.postMessage` before `startRendering()`; the message never landed and the test got the live-input frequency. Fixed by accepting `processorOptions: { mode, autoFreeze }` at construction. The worklet still uses port messages for the live UI (where they work fine).
+- **The "symmetric" vs "periodic" Hann window distinction matters.** My first window divided by N-1, which fails COLA by ~0.5% (audible as a slight comb-filter ripple). The unit test for window² sum at 50% overlap caught it before any audio test could.
+
+Initial JS payload: 7.33 KB gzipped (was 6.34 KB in v0.2.0). The 1 KB increase covers the spectral processor's main-thread wiring; the FFT itself lives inside the worklet chunk (3.19 KB raw, lazy-loaded by `audioWorklet.addModule` only after Start).
 
 ## v0.2.0 update
 
@@ -59,7 +78,7 @@ Live: https://baditaflorin.github.io/implemment-the-following-time-displaced-ear
 
 - The pitch shifter uses two 50%-overlapping grains. This is fine at moderate ratios (0.5–2.0) but introduces audible warble at extreme ratios. A phase vocoder would sound cleaner at 0.25 (2 octaves down). Deferred until we ship a "high quality" toggle.
 - No OfflineAudioContext-based test for the actual DSP output. The smoke test verifies the UI; the DSP is verified by ear.
-- The WebGPU FFT path is *documented* (ADR 0006) but *not implemented*. AnalyserNode is sufficient for v1's spectrogram.
+- The WebGPU FFT path is _documented_ (ADR 0006) but _not implemented_. AnalyserNode is sufficient for v1's spectrogram.
 
 ## Time spent vs. estimate
 

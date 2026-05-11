@@ -16,12 +16,12 @@ Ship a minimal PWA in v0.2.0:
 
 ## Caching strategy
 
-| Request | Strategy | Cache |
-|---|---|---|
-| Navigation (HTML) | Network-first, fall back to cached `./index.html` | `tde-shell-v1` |
-| `./assets/*` | Cache-first (Vite hashes filenames → immutable) | `tde-assets-v1` |
-| Other same-origin | Cache-first | `tde-shell-v1` |
-| Cross-origin (Pyodide CDN) | Pass through (browser HTTP cache handles it) | — |
+| Request                    | Strategy                                          | Cache           |
+| -------------------------- | ------------------------------------------------- | --------------- |
+| Navigation (HTML)          | Network-first, fall back to cached `./index.html` | `tde-shell-v1`  |
+| `./assets/*`               | Cache-first (Vite hashes filenames → immutable)   | `tde-assets-v1` |
+| Other same-origin          | Cache-first                                       | `tde-shell-v1`  |
+| Cross-origin (Pyodide CDN) | Pass through (browser HTTP cache handles it)      | —               |
 
 We deliberately do **not** cache Pyodide ourselves. The runtime is ~25 MB and the browser's HTTP cache already does a fine job of it on the second visit. Storing it ourselves would consume more origin quota and complicate cache eviction.
 
