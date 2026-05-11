@@ -1,19 +1,21 @@
 /// <reference lib="webworker" />
 
-// Granular pitch-shifter — overlap-add of 50%-overlapping Hann-windowed grains
-// read from a circular delay buffer at a variable read rate. Sounds smoother
-// than naive resampling and avoids the FFT cost of a phase vocoder; perfectly
-// adequate for the "whale song" 2-octaves-down use case.
-//
-// Algorithm:
-//   write index advances 1 sample per render frame
-//   two read pointers (grains) advance at `pitchRatio` samples per render frame
-//     and wrap when they reach grainSize
-//   each grain is Hann-windowed; the two grains are offset by grainSize / 2
-//   output is the sum of the two windowed grains
+// Granular pitch-shifter — two Hann-windowed grains, 50% overlapped, reading
+// from a circular delay buffer at pitchRatio samples per output sample.
 //
 // pitchRatio < 1 → pitch down (e.g. 0.25 = 2 octaves down)
-// pitchRatio > 1 → pitch up (e.g. 2.0 = 1 octave up)
+// pitchRatio > 1 → pitch up
+// pitchRatio = 1 → unity (passthrough, after one grain of warm-up)
+//
+// Key invariants of the algorithm:
+//   - writeIdx advances at 1 sample/sample (input write head)
+//   - each grain has independent read position (advances at pitchRatio)
+//   - each grain has independent phase (advances at 1, wraps at grainSize)
+//   - when a grain's phase wraps, its read position is snapped to
+//     (writeIdx - grainSize) so it starts reading the most-recent grain's
+//     worth of buffer
+//   - the other grain (offset by grainSize/2 in phase) is at its window
+//     peak during the snap, hiding the discontinuity in crossfade
 
 const GRAIN_MS = 80;
 const BUFFER_MS = 500;
@@ -25,8 +27,10 @@ class PitchShifterProcessor extends AudioWorkletProcessor {
   private readonly window: Float32Array;
 
   private writeIdx = 0;
-  private grain1Pos = 0;
-  private grain2Pos: number;
+  private read1 = 0;
+  private read2 = 0;
+  private phase1 = 0;
+  private phase2: number;
   private pitchRatio = 0.25;
 
   static get parameterDescriptors(): AudioParamDescriptor[] {
@@ -51,7 +55,11 @@ class PitchShifterProcessor extends AudioWorkletProcessor {
     for (let i = 0; i < this.grainSize; i++) {
       this.window[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (this.grainSize - 1));
     }
-    this.grain2Pos = this.grainSize / 2;
+    this.phase2 = this.grainSize / 2;
+    // Initial read positions point to the start of the (zero-filled) buffer;
+    // they'll be repositioned on the first grain wrap.
+    this.read1 = 0;
+    this.read2 = 0;
   }
 
   override process(
@@ -73,42 +81,52 @@ class PitchShifterProcessor extends AudioWorkletProcessor {
     const grainSize = this.grainSize;
     const bufferSize = this.bufferSize;
     const buffer = this.buffer;
-    const window = this.window;
+    const win = this.window;
+    const ratio = this.pitchRatio;
     const frames = outChan.length;
 
     for (let n = 0; n < frames; n++) {
-      const sample = inChan && inChan[n] !== undefined ? inChan[n]! : 0;
+      const sample = inChan ? (inChan[n] ?? 0) : 0;
       buffer[this.writeIdx] = sample;
-      this.writeIdx = (this.writeIdx + 1) % bufferSize;
+      this.writeIdx = this.writeIdx + 1;
+      if (this.writeIdx >= bufferSize) this.writeIdx = 0;
 
-      const baseRead = this.writeIdx - grainSize;
+      // Linear-interpolated reads at floating-point positions.
+      const r1 = this.read1;
+      const r2 = this.read2;
+      const i1 = Math.floor(r1);
+      const i2 = Math.floor(r2);
+      const f1 = r1 - i1;
+      const f2 = r2 - i2;
+      const j1 = i1 + 1 >= bufferSize ? 0 : i1 + 1;
+      const j2 = i2 + 1 >= bufferSize ? 0 : i2 + 1;
 
-      const g1 = this.grain1Pos;
-      const g2 = this.grain2Pos;
+      const s1 = (buffer[i1] ?? 0) * (1 - f1) + (buffer[j1] ?? 0) * f1;
+      const s2 = (buffer[i2] ?? 0) * (1 - f2) + (buffer[j2] ?? 0) * f2;
 
-      const r1f = baseRead + g1;
-      const r2f = baseRead + g2;
-
-      const i1 = ((Math.floor(r1f) % bufferSize) + bufferSize) % bufferSize;
-      const i2 = ((Math.floor(r2f) % bufferSize) + bufferSize) % bufferSize;
-      const frac1 = r1f - Math.floor(r1f);
-      const frac2 = r2f - Math.floor(r2f);
-
-      const next1 = (i1 + 1) % bufferSize;
-      const next2 = (i2 + 1) % bufferSize;
-
-      const s1 = (buffer[i1] ?? 0) * (1 - frac1) + (buffer[next1] ?? 0) * frac1;
-      const s2 = (buffer[i2] ?? 0) * (1 - frac2) + (buffer[next2] ?? 0) * frac2;
-
-      const w1 = window[Math.floor(g1) % grainSize] ?? 0;
-      const w2 = window[Math.floor(g2) % grainSize] ?? 0;
-
+      const w1 = win[this.phase1] ?? 0;
+      const w2 = win[this.phase2] ?? 0;
       outChan[n] = s1 * w1 + s2 * w2;
 
-      this.grain1Pos += this.pitchRatio;
-      this.grain2Pos += this.pitchRatio;
-      if (this.grain1Pos >= grainSize) this.grain1Pos -= grainSize;
-      if (this.grain2Pos >= grainSize) this.grain2Pos -= grainSize;
+      // Advance read pointers at pitchRatio (this is what does the shift).
+      this.read1 += ratio;
+      this.read2 += ratio;
+      if (this.read1 >= bufferSize) this.read1 -= bufferSize;
+      if (this.read2 >= bufferSize) this.read2 -= bufferSize;
+
+      // Phase advances at 1 per output sample.
+      this.phase1++;
+      this.phase2++;
+      if (this.phase1 >= grainSize) {
+        this.phase1 = 0;
+        this.read1 = this.writeIdx - grainSize;
+        if (this.read1 < 0) this.read1 += bufferSize;
+      }
+      if (this.phase2 >= grainSize) {
+        this.phase2 = 0;
+        this.read2 = this.writeIdx - grainSize;
+        if (this.read2 < 0) this.read2 += bufferSize;
+      }
     }
 
     if (output.length > 1) {
