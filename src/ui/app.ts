@@ -1,4 +1,4 @@
-import { AudioEngine, DEFAULT_PARAMS, type EngineParams } from '../audio/engine';
+import { AudioEngine, DEFAULT_PARAMS, type EngineParams, type SpectralMode } from '../audio/engine';
 import { Spectrogram } from '../audio/spectrogram';
 import { loadPrefs, savePrefs } from '../lib/prefs';
 import { mountAnalysisPanel } from './analysis-panel';
@@ -122,13 +122,31 @@ export function mountApp(root: HTMLElement): void {
           </div>
         </section>
 
+        <section class="card">
+          <h2>Spectral processor (STFT + WebAudio worklet)</h2>
+          <p style="margin: 0; color: var(--fg-dim); font-size: 0.85rem;">
+            Runs after the pitch shifter. <b>Freeze</b> captures the current
+            frequency content and sustains it indefinitely. <b>Smear</b> low-pass
+            filters magnitudes across frames — drone-like textures.
+          </p>
+          <div class="row" id="spectral-modes">
+            <button data-spectral="bypass" class="active">Bypass</button>
+            <button data-spectral="freeze">Freeze mode</button>
+            <button data-spectral="smear">Smear mode</button>
+          </div>
+          <div class="row">
+            <button id="freeze-now" disabled>Freeze the current spectrum</button>
+            <button id="release-spectrum" disabled>Release</button>
+          </div>
+        </section>
+
         <section class="card" id="analysis-card">
           <h2>Offline analysis (Pyodide + librosa)</h2>
         </section>
       </main>
 
       <footer>
-        <span>v0.2.0 · processed locally, no audio leaves your device · installable as a PWA</span>
+        <span>v0.3.0 · processed locally, no audio leaves your device · installable as a PWA</span>
         <span>
           <a href="https://github.com/baditaflorin/implemment-the-following-time-displaced-ears" target="_blank" rel="noreferrer">source</a>
           · <a href="https://github.com/baditaflorin/implemment-the-following-time-displaced-ears/blob/main/docs/privacy.md" target="_blank" rel="noreferrer">privacy</a>
@@ -156,6 +174,30 @@ export function mountApp(root: HTMLElement): void {
   const lpfInput = $<HTMLInputElement>('#lpf');
   const mixInput = $<HTMLInputElement>('#mix');
   const outInput = $<HTMLInputElement>('#out');
+
+  const spectralModesEl = $<HTMLDivElement>('#spectral-modes');
+  const freezeNowBtn = $<HTMLButtonElement>('#freeze-now');
+  const releaseBtn = $<HTMLButtonElement>('#release-spectrum');
+
+  function applySpectralMode(mode: SpectralMode): void {
+    params.spectralMode = mode;
+    engine.setSpectralMode(mode);
+    spectralModesEl.querySelectorAll('button').forEach((b) => {
+      b.classList.toggle('active', b.dataset['spectral'] === mode);
+    });
+    freezeNowBtn.disabled = mode !== 'freeze';
+    releaseBtn.disabled = mode !== 'freeze';
+    persist();
+  }
+
+  spectralModesEl.querySelectorAll<HTMLButtonElement>('button').forEach((b) => {
+    b.addEventListener('click', () => {
+      const m = b.dataset['spectral'] as SpectralMode | undefined;
+      if (m) applySpectralMode(m);
+    });
+  });
+  freezeNowBtn.addEventListener('click', () => engine.freezeSpectrum());
+  releaseBtn.addEventListener('click', () => engine.releaseSpectrum());
 
   const presetsEl = $<HTMLDivElement>('#presets');
   for (const p of PRESETS) {
@@ -211,6 +253,7 @@ export function mountApp(root: HTMLElement): void {
     engine.setLowpassHz(params.lowpassHz);
     engine.setDryWet(params.dryWet);
     engine.setOutputGain(params.outputGain);
+    engine.setSpectralMode(params.spectralMode);
   }
 
   delayInput.addEventListener('input', () => {
@@ -306,5 +349,6 @@ export function mountApp(root: HTMLElement): void {
   mountAnalysisPanel($<HTMLElement>('#analysis-card'), engine);
 
   renderInputs();
+  applySpectralMode(params.spectralMode);
   updateStatus('idle');
 }

@@ -1,7 +1,16 @@
 import pitchShifterWorkletUrl from './worklets/pitch-shifter.worklet?worker&url';
 import tapWorkletUrl from './worklets/tap.worklet?worker&url';
+import spectralWorkletUrl from './worklets/spectral.worklet?worker&url';
 
 export type EngineState = 'idle' | 'starting' | 'running' | 'error';
+
+export type SpectralMode = 'bypass' | 'freeze' | 'smear';
+
+const SPECTRAL_MODE_VALUE: Record<SpectralMode, number> = {
+  bypass: 0,
+  freeze: 1,
+  smear: 2,
+};
 
 export interface EngineParams {
   delaySeconds: number;
@@ -10,6 +19,7 @@ export interface EngineParams {
   lowpassHz: number;
   dryWet: number;
   outputGain: number;
+  spectralMode: SpectralMode;
 }
 
 export interface EngineCallbacks {
@@ -24,6 +34,7 @@ export const DEFAULT_PARAMS: EngineParams = {
   lowpassHz: 18000,
   dryWet: 1,
   outputGain: 0.9,
+  spectralMode: 'bypass',
 };
 
 export const MAX_DELAY_SECONDS = 30;
@@ -36,6 +47,7 @@ export class AudioEngine {
   private highpass: BiquadFilterNode | null = null;
   private lowpass: BiquadFilterNode | null = null;
   private pitch: AudioWorkletNode | null = null;
+  private spectral: AudioWorkletNode | null = null;
   private dryGain: GainNode | null = null;
   private wetGain: GainNode | null = null;
   private outGain: GainNode | null = null;
@@ -80,6 +92,7 @@ export class AudioEngine {
 
       await ctx.audioWorklet.addModule(pitchShifterWorkletUrl);
       await ctx.audioWorklet.addModule(tapWorkletUrl);
+      await ctx.audioWorklet.addModule(spectralWorkletUrl);
 
       this.source = ctx.createMediaStreamSource(this.stream);
 
@@ -103,6 +116,16 @@ export class AudioEngine {
         parameterData: { pitchRatio: initial.pitchRatio },
       });
 
+      this.spectral = new AudioWorkletNode(ctx, 'spectral', {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [1],
+      });
+      this.spectral.port.postMessage({
+        type: 'mode',
+        mode: SPECTRAL_MODE_VALUE[initial.spectralMode],
+      });
+
       this.dryGain = ctx.createGain();
       this.dryGain.gain.value = 1 - initial.dryWet;
       this.wetGain = ctx.createGain();
@@ -119,7 +142,8 @@ export class AudioEngine {
 
       this.lowpass.connect(this.delay);
       this.delay.connect(this.pitch);
-      this.pitch.connect(this.wetGain);
+      this.pitch.connect(this.spectral);
+      this.spectral.connect(this.wetGain);
 
       this.lowpass.connect(this.dryGain);
 
@@ -153,6 +177,7 @@ export class AudioEngine {
       this.lowpass?.disconnect();
       this.delay?.disconnect();
       this.pitch?.disconnect();
+      this.spectral?.disconnect();
       this.dryGain?.disconnect();
       this.wetGain?.disconnect();
       this.outGain?.disconnect();
@@ -165,6 +190,7 @@ export class AudioEngine {
     this.lowpass = null;
     this.delay = null;
     this.pitch = null;
+    this.spectral = null;
     this.dryGain = null;
     this.wetGain = null;
     this.outGain = null;
@@ -210,6 +236,21 @@ export class AudioEngine {
   setOutputGain(g: number): void {
     if (!this.ctx || !this.outGain) return;
     this.outGain.gain.setTargetAtTime(Math.max(0, Math.min(2, g)), this.ctx.currentTime, 0.02);
+  }
+
+  setSpectralMode(mode: SpectralMode): void {
+    if (!this.spectral) return;
+    this.spectral.port.postMessage({ type: 'mode', mode: SPECTRAL_MODE_VALUE[mode] });
+  }
+
+  freezeSpectrum(): void {
+    if (!this.spectral) return;
+    this.spectral.port.postMessage({ type: 'freeze' });
+  }
+
+  releaseSpectrum(): void {
+    if (!this.spectral) return;
+    this.spectral.port.postMessage({ type: 'release' });
   }
 
   // Capture audio from the post-filter, pre-delay path for offline analysis.
