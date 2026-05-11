@@ -34,8 +34,7 @@ test('pitch shifter renders sine at expected ratio', async ({ page }) => {
       const DURATION_SEC = 2;
       const SIG_HZ = 1000;
 
-      const dbg = (window as unknown as { __tde__?: { pitchShifterWorkletUrl?: string } })
-        .__tde__;
+      const dbg = (window as unknown as { __tde__?: { pitchShifterWorkletUrl?: string } }).__tde__;
       const workletUrl = dbg?.pitchShifterWorkletUrl;
       if (!workletUrl) throw new Error('window.__tde__.pitchShifterWorkletUrl missing');
 
