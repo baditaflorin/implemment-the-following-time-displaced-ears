@@ -128,7 +128,7 @@ export function mountApp(root: HTMLElement): void {
       </main>
 
       <footer>
-        <span>v0.1.0 · processed locally, no audio leaves your device</span>
+        <span>v0.2.0 · processed locally, no audio leaves your device · installable as a PWA</span>
         <span>
           <a href="https://github.com/baditaflorin/implemment-the-following-time-displaced-ears" target="_blank" rel="noreferrer">source</a>
           · <a href="https://github.com/baditaflorin/implemment-the-following-time-displaced-ears/blob/main/docs/privacy.md" target="_blank" rel="noreferrer">privacy</a>

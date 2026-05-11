@@ -1,8 +1,20 @@
-# Postmortem — v0.1.0
+# Postmortem — v0.2.0
 
 Date: 2026-05-11
 
-## What was built
+## v0.2.0 update
+
+Shipped immediately after v0.1.0 in the same session. Three changes:
+
+1. **PWA + service worker** — manifest, two SVG icons (one maskable), simple ~50-line SW with cache-first for hashed assets and network-first with cached-shell fallback for navigation. Registered prod-only so dev HMR isn't affected. ADR 0018.
+2. **DSP regression test** — Playwright + OfflineAudioContext + naive DFT around the expected peak frequency. Tests pitch ratios 0.5, 1.0, 2.0 against a 1 kHz sine input. Caught a real bug on first run: at ratio 1.0 the granular shifter was producing near-silence because the read head was double-advancing (write head + grain phase both at +1 per output sample, giving an effective 2x speedup that put the read pointer outside the populated buffer region). Rewritten with independent grain read pointers; all three ratios now within ±25 Hz tolerance.
+3. **Smoke port race fix** — the smoke script now kills any lingering process on port 4173 before invoking Playwright, removing the intermittent 15-second `webServer` timeout that bit me on the v0.1.0 push.
+
+Postmortem #1 said the next-most-valuable improvements were DSP tests, phase-vocoder pitch shift, and PWA. v0.2.0 ships DSP tests and PWA. Phase vocoder is deferred — the rewritten granular shifter now actually works at ratio 1.0, so the existing presets sound substantially better than they did 30 minutes ago, and the urgency dropped.
+
+## v0.1.0 — original
+
+### What was built
 
 A single-page web app on GitHub Pages that:
 
