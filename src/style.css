@@ -240,6 +240,26 @@ main {
   border-radius: var(--radius);
   display: block;
 }
+@media (max-width: 600px) {
+  #spectrogram {
+    height: 280px;
+  }
+  button {
+    min-height: 44px;
+    padding: 0.7rem 1rem;
+  }
+  input[type='range']::-webkit-slider-thumb {
+    width: 22px;
+    height: 22px;
+  }
+  input[type='range']::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+  }
+  .control {
+    grid-template-columns: 90px 1fr 56px;
+  }
+}
 
 #meter {
   width: 100%;
