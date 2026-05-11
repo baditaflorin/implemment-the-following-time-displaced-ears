@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# commit-msg: enforce Conventional Commits.
+set -euo pipefail
+
+msg_file="$1"
+first_line=$(head -1 "$msg_file")
+
+# Allow merge commits, revert commits, and fixup/squash.
+if [[ "$first_line" =~ ^(Merge|Revert|fixup!|squash!) ]]; then
+  exit 0
+fi
+
+# type(scope)?(!)?: subject  — types per project convention
+re='^(feat|fix|docs|chore|refactor|test|ops|data|perf|style|build|ci)(\([a-z0-9_/.-]+\))?!?: .+'
+
+if ! [[ "$first_line" =~ $re ]]; then
+  echo "[commit-msg] message does not follow Conventional Commits."
+  echo "  got:      $first_line"
+  echo "  expected: <type>(<scope>)?(!)?: <subject>"
+  echo "  types:    feat|fix|docs|chore|refactor|test|ops|data|perf|style|build|ci"
+  exit 1
+fi

@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# pre-push: tests, build, verify docs/ is Pages-ready, smoke.
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+if [ ! -d node_modules ]; then
+  echo "[pre-push] node_modules missing — run 'npm install'"
+  exit 1
+fi
+
+echo "[pre-push] unit tests"
+npm test
+
+echo "[pre-push] build"
+npm run build
+
+if [ ! -s docs/index.html ]; then
+  echo "[pre-push] FATAL: docs/index.html missing or empty"
+  exit 1
+fi
+if [ ! -f docs/.nojekyll ]; then
+  echo "[pre-push] FATAL: docs/.nojekyll missing"
+  exit 1
+fi
+
+echo "[pre-push] smoke"
+npm run smoke
+
+echo "[pre-push] ok"

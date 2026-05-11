@@ -1,0 +1,1 @@
+class c extends AudioWorkletProcessor{active=!1;constructor(){super(),this.port.onmessage=s=>{const t=s.data;t&&t.type==="set"&&typeof t.active=="boolean"&&(this.active=t.active)}}process(s,t){const o=s[0],r=t[0];if(!o||!r)return!0;const e=o[0],a=r[0];return e&&a&&(a.set(e),this.active&&this.port.postMessage(new Float32Array(e))),!0}}registerProcessor("tap",c);

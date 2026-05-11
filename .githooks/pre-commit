@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# pre-commit: format check, type check, lint, secret scan.
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "[pre-commit] prettier --check"
+if [ -d node_modules ]; then
+  npx --no-install prettier --check 'src/**/*.{ts,tsx,js,css,html,json,md}' 2>/dev/null || {
+    echo "[pre-commit] formatting issues — run 'make fmt' to fix"
+    exit 1
+  }
+else
+  echo "[pre-commit] skipped (run 'npm install' to enable)"
+fi
+
+echo "[pre-commit] tsc --noEmit"
+if [ -d node_modules ]; then
+  npx --no-install tsc --noEmit
+fi
+
+echo "[pre-commit] eslint"
+if [ -d node_modules ] && [ -f node_modules/.bin/eslint ]; then
+  npx --no-install eslint 'src/**/*.{ts,tsx,js}' || {
+    echo "[pre-commit] eslint failed"
+    exit 1
+  }
+fi
+
+if command -v gitleaks >/dev/null 2>&1; then
+  echo "[pre-commit] gitleaks"
+  gitleaks protect --staged --redact --no-banner || {
+    echo "[pre-commit] gitleaks blocked the commit"
+    exit 1
+  }
+else
+  echo "[pre-commit] gitleaks not installed — skipping (install: brew install gitleaks)"
+fi
+
+echo "[pre-commit] ok"

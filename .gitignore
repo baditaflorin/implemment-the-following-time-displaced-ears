@@ -1,0 +1,60 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+.pnpm-store/
+
+# Vite intermediate / cache (NOT docs/ — that's the published Pages output)
+.vite/
+dist/
+.cache/
+
+# TypeScript
+*.tsbuildinfo
+
+# Coverage / test artifacts
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+.playwright/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+.AppleDouble
+.LSOverride
+Icon?
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Temp
+tmp/
+.tmp/
+*.tmp
+
+# Python prototype scratch (Pyodide notebooks etc., never shipped)
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+prototype/scratch/
+
+# IMPORTANT: docs/ is the GitHub Pages publish root. DO NOT IGNORE.
+# Built assets land in docs/assets/ — committed on purpose.
