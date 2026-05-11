@@ -1,5 +1,6 @@
 import type { AudioEngine } from '../audio/engine';
 import type { AnalysisClient, AnalysisResult } from '../features/analysis/analysis-client';
+import { encodeWavMono16, triggerDownload } from '../lib/wav';
 
 const CAPTURE_SEC = 5;
 
@@ -13,16 +14,26 @@ export function mountAnalysisPanel(card: HTMLElement, engine: AudioEngine): void
     </p>
     <div class="row">
       <button id="analyze">Capture &amp; analyze ${CAPTURE_SEC}s</button>
+      <button id="save-wav" disabled>Save last capture as WAV</button>
       <span id="analyze-status" class="status">ready (worker not loaded)</span>
     </div>
     <div id="analysis-output" class="analysis-output hidden"></div>
   `;
   const btn = card.querySelector<HTMLButtonElement>('#analyze')!;
+  const saveBtn = card.querySelector<HTMLButtonElement>('#save-wav')!;
   const statusEl = card.querySelector<HTMLSpanElement>('#analyze-status')!;
   const outputEl = card.querySelector<HTMLDivElement>('#analysis-output')!;
 
   let client: AnalysisClient | null = null;
   let running = false;
+  let lastCapture: { audio: Float32Array; sampleRate: number } | null = null;
+
+  saveBtn.addEventListener('click', () => {
+    if (!lastCapture) return;
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const blob = encodeWavMono16(lastCapture.audio, lastCapture.sampleRate);
+    triggerDownload(blob, `time-displaced-ears-${stamp}.wav`);
+  });
 
   const setStatus = (text: string, cls: 'ok' | 'warn' | 'err' | null = null): void => {
     statusEl.textContent = text;
@@ -47,6 +58,9 @@ export function mountAnalysisPanel(card: HTMLElement, engine: AudioEngine): void
       setStatus(`capturing ${CAPTURE_SEC}s …`, 'warn');
       const audio = await engine.captureRawInput(CAPTURE_SEC);
       const sampleRate = engine.getSampleRate();
+      // Keep a copy for WAV export — the worker call transfers ownership.
+      lastCapture = { audio: new Float32Array(audio), sampleRate };
+      saveBtn.disabled = false;
 
       if (!client) {
         const mod = await import('../features/analysis/analysis-client');
