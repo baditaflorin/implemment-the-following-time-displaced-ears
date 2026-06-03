@@ -1,27 +1,6 @@
 {
-  "name": "time-displaced-ears",
-  "version": "0.3.0",
-  "private": true,
-  "type": "module",
+  "dependencies": {},
   "description": "A browser audio lab for hearing live microphone input delayed, pitch-shifted, and spectrally transformed.",
-  "homepage": "https://baditaflorin.github.io/implemment-the-following-time-displaced-ears/",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/baditaflorin/implemment-the-following-time-displaced-ears.git"
-  },
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build && node scripts/postbuild.mjs",
-    "preview": "vite preview --port 4173",
-    "pages-preview": "node scripts/serve-docs.mjs",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "smoke": "bash scripts/smoke.sh",
-    "lint": "eslint 'src/**/*.{ts,tsx,js}' && tsc --noEmit",
-    "fmt": "prettier --write 'src/**/*.{ts,tsx,js,css,html,json,md}' 'docs/adr/**/*.md' '*.md' '*.json' 'scripts/**/*.{mjs,sh}' || true",
-    "fmt:check": "prettier --check 'src/**/*.{ts,tsx,js,css,html,json,md}'",
-    "clean": "rm -rf dist .vite node_modules/.vite tmp"
-  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.49.0",
@@ -34,6 +13,29 @@
     "prettier": "^3.4.2",
     "typescript": "^5.7.2",
     "vite": "^5.4.11",
-    "vitest": "^2.1.8"
-  }
+    "vitest": "4.1.0"
+  },
+  "homepage": "https://baditaflorin.github.io/implemment-the-following-time-displaced-ears/",
+  "name": "time-displaced-ears",
+  "overrides": {},
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/baditaflorin/implemment-the-following-time-displaced-ears.git"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit \u0026\u0026 vite build \u0026\u0026 node scripts/postbuild.mjs",
+    "preview": "vite preview --port 4173",
+    "pages-preview": "node scripts/serve-docs.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "smoke": "bash scripts/smoke.sh",
+    "lint": "eslint 'src/**/*.{ts,tsx,js}' \u0026\u0026 tsc --noEmit",
+    "fmt": "prettier --write 'src/**/*.{ts,tsx,js,css,html,json,md}' 'docs/adr/**/*.md' '*.md' '*.json' 'scripts/**/*.{mjs,sh}' || true",
+    "fmt:check": "prettier --check 'src/**/*.{ts,tsx,js,css,html,json,md}'",
+    "clean": "rm -rf dist .vite node_modules/.vite tmp"
+  },
+  "type": "module",
+  "version": "0.3.0"
 }
