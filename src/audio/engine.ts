@@ -51,6 +51,7 @@ export class AudioEngine {
   private dryGain: GainNode | null = null;
   private wetGain: GainNode | null = null;
   private outGain: GainNode | null = null;
+  private limiter: DynamicsCompressorNode | null = null;
   private analyser: AnalyserNode | null = null;
   private levelTimer: number | null = null;
   private state: EngineState = 'idle';
@@ -133,6 +134,23 @@ export class AudioEngine {
       this.outGain = ctx.createGain();
       this.outGain.gain.value = initial.outputGain;
 
+      // Safety limiter — this is a live mic effects chain (delay, pitch shift,
+      // up to 2x output gain) that a user could easily run through speakers
+      // rather than headphones. Without a final brick-wall-ish stage, a hot
+      // mic input combined with a maxed output slider (or acoustic feedback
+      // from speaker bleed, since echoCancellation is intentionally disabled
+      // above) could produce a sudden loud/clipped transient at the user's
+      // ears. This node is the last thing before the ears get anything, no
+      // matter what the dry/wet/output controls are set to. There is
+      // intentionally no other dynamics processing anywhere else in the
+      // graph — this is the single safety net.
+      this.limiter = ctx.createDynamicsCompressor();
+      this.limiter.threshold.value = -6;
+      this.limiter.knee.value = 0;
+      this.limiter.ratio.value = 20;
+      this.limiter.attack.value = 0.003;
+      this.limiter.release.value = 0.25;
+
       this.analyser = ctx.createAnalyser();
       this.analyser.fftSize = 2048;
       this.analyser.smoothingTimeConstant = 0.75;
@@ -150,8 +168,9 @@ export class AudioEngine {
       this.dryGain.connect(this.outGain);
       this.wetGain.connect(this.outGain);
 
-      this.outGain.connect(this.analyser);
-      this.outGain.connect(ctx.destination);
+      this.outGain.connect(this.limiter);
+      this.limiter.connect(this.analyser);
+      this.limiter.connect(ctx.destination);
 
       this.startLevelLoop();
       this.setState('running');
@@ -181,6 +200,7 @@ export class AudioEngine {
       this.dryGain?.disconnect();
       this.wetGain?.disconnect();
       this.outGain?.disconnect();
+      this.limiter?.disconnect();
       this.analyser?.disconnect();
     } catch {
       // disconnect on a never-connected node throws; ignore
@@ -194,6 +214,7 @@ export class AudioEngine {
     this.dryGain = null;
     this.wetGain = null;
     this.outGain = null;
+    this.limiter = null;
     this.analyser = null;
 
     if (this.ctx && this.ctx.state !== 'closed') {
@@ -268,12 +289,14 @@ export class AudioEngine {
   // actually hearing. The raw-input tap above is only useful for offline-
   // analysis pipelines that need clean pre-effect audio; for "record what I
   // just heard" the user needs this one. The output bus already mixes the
-  // dry + wet branches and applies the output-gain trim.
+  // dry + wet branches, applies the output-gain trim, and passes through the
+  // safety limiter — tapping post-limiter so the captured WAV matches what
+  // was actually sent to the speakers/headphones, not the pre-limit signal.
   captureOutput(durationSec: number): Promise<Float32Array> {
-    if (!this.ctx || !this.outGain) {
+    if (!this.ctx || !this.limiter) {
       return Promise.reject(new Error('engine not running'));
     }
-    return this.tapAudio(this.outGain, durationSec);
+    return this.tapAudio(this.limiter, durationSec);
   }
 
   private tapAudio(source: AudioNode, durationSec: number): Promise<Float32Array> {
